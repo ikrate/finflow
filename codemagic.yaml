@@ -1,0 +1,54 @@
+workflows:
+  finflow-release-pipeline:
+    name: Finflow Release Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      node: 20
+      xcode: latest
+      cocoapods: default
+      vars:
+        APP_NAME: "FinFlow"
+        BUNDLE_ID: "com.claycroc.finflow"
+    scripts:
+      - name: Install Node Dependencies
+        script: |
+          npm install
+          
+      - name: Generate Native iOS Project (Expo Prebuild)
+        script: |
+          # This creates the /ios folder and runs pod install
+          npx expo prebuild --platform ios --clean
+          
+      - name: Build iOS Application (Unsigned)
+        script: |
+          cd ios
+          # Build the raw iOS App without requiring paid Apple Developer certificates
+          xcodebuild build \
+            -workspace "${APP_NAME}.xcworkspace" \
+            -scheme "${APP_NAME}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+            
+      - name: Package to IPA for Sideloading
+        script: |
+          # Sideloading tools usually require the .app to be zipped inside a 'Payload' folder
+          cd ios/build/Build/Products/Release-iphoneos
+          mkdir -p Payload
+          cp -R "${APP_NAME}.app" Payload/
+          zip -q -r "../../../../../${APP_NAME}-unsigned.ipa" Payload
+          
+    artifacts:
+      - ${APP_NAME}-unsigned.ipa
+      - ios/build/Build/Products/Release-iphoneos/*.app
+    publishing:
+      email:
+        recipients:
+          - gallageimesh@gmail.com
+        notify:
+          failure: true
+          success: true
