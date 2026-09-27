@@ -15,11 +15,12 @@ interface TransactionItemProps {
   currency?: string;
   onDelete: (id: string) => void;
   onEdit?: (transaction: Transaction) => void;
+  sourceDisplayName?: string;
 }
 
 const DELETE_BTN_WIDTH = 76;
 
-export function TransactionItem({ transaction, currency = '$', onDelete, onEdit }: TransactionItemProps) {
+export function TransactionItem({ transaction, currency = '$', onDelete, onEdit, sourceDisplayName }: TransactionItemProps) {
   const theme = useTheme();
   const meta = CATEGORY_MAP[transaction.category as import('@/types/finance').Category] ?? CATEGORY_MAP.Other;
   const isIncome = transaction.type === 'income';
@@ -102,7 +103,7 @@ export function TransactionItem({ transaction, currency = '$', onDelete, onEdit 
               </ThemedText>
               {transaction.source ? (
                 <ThemedText type="code" themeColor="textSecondary" style={styles.dateLabel}>
-                  • {transaction.source}
+                  • {sourceDisplayName || transaction.source}
                 </ThemedText>
               ) : null}
               <ThemedText type="code" themeColor="textSecondary" style={styles.dateLabel}>

@@ -41,6 +41,7 @@ export interface AutomationConfig {
 export interface AppSettings {
   currency: string;
   enableHaptics: boolean;
+  cardNicknames?: Record<string, string>;
 }
 
 export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {

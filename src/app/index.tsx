@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   AppState,
   KeyboardAvoidingView,
@@ -33,6 +34,7 @@ import {
   loadAppSettings,
   loadAutomationConfig,
   loadTransactions,
+  saveAppSettings,
   saveTransactions,
 } from '@/services/storage';
 import {
@@ -96,6 +98,34 @@ export default function HomeScreen() {
 
   const [automationConfig, setAutomationConfig] = useState<AutomationConfig>(DEFAULT_AUTOMATION_CONFIG);
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+
+  const handleRenameCard = useCallback((sourceId: string, currentName: string) => {
+    Alert.prompt(
+      'Nickname Card',
+      `Enter a nickname for ${sourceId}:`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Save',
+          onPress: (newName) => {
+            if (newName && newName.trim()) {
+              const updatedSettings = {
+                ...appSettings,
+                cardNicknames: {
+                  ...(appSettings.cardNicknames || {}),
+                  [sourceId]: newName.trim()
+                }
+              };
+              setAppSettings(updatedSettings);
+              saveAppSettings(updatedSettings);
+            }
+          }
+        }
+      ],
+      'plain-text',
+      currentName !== sourceId ? currentName : ''
+    );
+  }, [appSettings]);
 
   const updateAndPersist = useCallback((updated: Transaction[]) => {
     setTransactions(updated);
@@ -415,17 +445,19 @@ export default function HomeScreen() {
                 </Pressable>
                 {sources.map((src) => {
                   const isSelected = selectedSource === src;
+                  const displayName = appSettings.cardNicknames?.[src] || src;
                   return (
                     <Pressable
                       key={src}
                       onPress={() => setSelectedSource(src)}
+                      onLongPress={() => handleRenameCard(src, displayName)}
                       style={[styles.categoryChip, isSelected && styles.categoryChipActive]}>
                       <ThemedText
                         style={[
                           styles.categoryChipText,
                           isSelected && styles.categoryChipTextActive,
                         ]}>
-                        💳 {src}
+                        💳 {displayName}
                       </ThemedText>
                     </Pressable>
                   );
@@ -457,6 +489,7 @@ export default function HomeScreen() {
                   key={item.id}
                   transaction={item}
                   currency={appSettings.currency}
+                  sourceDisplayName={item.source ? (appSettings.cardNicknames?.[item.source] || item.source) : undefined}
                   onDelete={handleDelete}
                   onEdit={handleEdit}
                 />
