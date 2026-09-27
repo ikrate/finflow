@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "finflow",
+    "name": "FinFlow",
     "slug": "finflow",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,7 +8,13 @@
     "scheme": "finflow",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.claycroc.finflow"
     },
     "android": {
       "adaptiveIcon": {
@@ -32,11 +38,18 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "67665fcd-9048-4dbd-b232-a4e91ad7ec03"
+      }
     }
   }
 }
