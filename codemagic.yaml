@@ -45,7 +45,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your-email@domain.com # Update to your target notification email
+          - gallageimesh@gmail.com
         notify:
-          on_build_failure: true
-          on_build_success: true
+          failure: true
+          success: true
