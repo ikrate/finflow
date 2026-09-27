@@ -75,7 +75,7 @@ public struct MyAppShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: ReceiveShortcutInputIntent(),
             phrases: [
-                "Send input to FinFlow",
+                "Send input to \(.applicationName)",
                 "Add to \(.applicationName)"
             ],
             shortTitle: "Send to FinFlow",
