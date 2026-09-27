@@ -4,44 +4,47 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
-      flutter: stable
+      node: 20
       xcode: latest
       cocoapods: default
-      groups:
-        - finflow_credentials # Optional: Configure environment group in Codemagic UI for keys/certs
       vars:
-        APP_NAME: "finflow"
-        BUNDLE_ID: "com.example.finflow" # Replace with your real bundle ID/package name
+        APP_NAME: "FinFlow"
+        BUNDLE_ID: "com.claycroc.finflow"
     scripts:
-      - name: Set up local properties & Flutter dependencies
+      - name: Install Node Dependencies
         script: |
-          flutter packages pub get
-      - name: Run code analysis & unit tests
-        script: |
-          flutter analyze
-          flutter test
-      - name: Build Android App Bundle & APK
-        script: |
-          # Increment build number or pass via Codemagic environment
-          BUILD_NUMBER=$((${BUILD_NUMBER:-1}))
+          npm install
           
-          # Build Android App Bundle for Google Play
-          flutter build appbundle --release --build-number=$BUILD_NUMBER
-          
-          # Optional: Build standalone APK for quick testing
-          flutter build apk --release --build-number=$BUILD_NUMBER
-      - name: Build iOS Application
+      - name: Generate Native iOS Project (Expo Prebuild)
         script: |
-          BUILD_NUMBER=$((${BUILD_NUMBER:-1}))
+          # This creates the /ios folder and runs pod install
+          npx expo prebuild --platform ios --clean
           
-          # Build iOS release archive (no-codesign handles builds without imported Apple certs)
-          flutter build ios --release --no-codesign --build-number=$BUILD_NUMBER
+      - name: Build iOS Application (Unsigned)
+        script: |
+          cd ios
+          # Build the raw iOS App without requiring paid Apple Developer certificates
+          xcodebuild build \
+            -workspace "${APP_NAME}.xcworkspace" \
+            -scheme "${APP_NAME}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+            
+      - name: Package to IPA for Sideloading
+        script: |
+          # Sideloading tools usually require the .app to be zipped inside a 'Payload' folder
+          cd ios/build/Build/Products/Release-iphoneos
+          mkdir -p Payload
+          cp -R "${APP_NAME}.app" Payload/
+          zip -q -r "../../../../../${APP_NAME}-unsigned.ipa" Payload
+          
     artifacts:
-      - build/**/outputs/**/*.aab
-      - build/**/outputs/**/*.apk
-      - build/ios/iphoneos/*.app
-      - build/**/outputs/**/mapping.txt
-      - flutter_drive.log
+      - ${APP_NAME}-unsigned.ipa
+      - ios/build/Build/Products/Release-iphoneos/*.app
     publishing:
       email:
         recipients:
