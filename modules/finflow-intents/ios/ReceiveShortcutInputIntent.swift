@@ -22,7 +22,7 @@ public struct ReceiveShortcutInputIntent: AppIntent {
     public init() {}
 
     public static var parameterSummary: some ParameterSummary {
-        Summary("Send \(\\.$text) to My App") {
+        Summary("Send \(\.$text) to My App") {
             \.$amount
             \.$category
             \.$timestamp
@@ -33,24 +33,13 @@ public struct ReceiveShortcutInputIntent: AppIntent {
         let id = UUID().uuidString
         let dateToSave = timestamp ?? Date()
         
-        let record: [String: Any] = [
-            "id": id,
-            "text": text,
-            "amount": amount as Any,
-            "category": category as Any,
-            "timestamp": ISO8601DateFormatter().string(from: dateToSave),
-            "source": "shortcut"
-        ]
-        
-        // Clean out NSNull or nil explicitly before JSON serialization
         var cleanRecord = [String: Any]()
-        for (key, value) in record {
-            if let v = value as? String { cleanRecord[key] = v }
-            else if let v = value as? Double { cleanRecord[key] = v }
-        }
-        cleanRecord["source"] = "shortcut"
         cleanRecord["id"] = id
+        cleanRecord["text"] = text
+        if let amt = amount { cleanRecord["amount"] = amt }
+        if let cat = category { cleanRecord["category"] = cat }
         cleanRecord["timestamp"] = ISO8601DateFormatter().string(from: dateToSave)
+        cleanRecord["source"] = "shortcut"
 
         try saveRecord(cleanRecord)
         
