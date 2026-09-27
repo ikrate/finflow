@@ -54,10 +54,19 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filterType, setFilterType] = useState<TransactionFilter>('all');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
+  const [selectedSource, setSelectedSource] = useState<string | 'All'>('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [syncBanner, setSyncBanner] = useState<string | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const sources = useMemo(() => {
+    const s = new Set<string>();
+    transactions.forEach((t) => {
+      if (t.source) s.add(t.source);
+    });
+    return Array.from(s).sort();
+  }, [transactions]);
 
   const showBanner = useCallback((msg: string) => {
     setSyncBanner(msg);
@@ -267,9 +276,10 @@ export default function HomeScreen() {
       if (filterType === 'expense' && t.type !== 'expense') return false;
       if (filterType === 'income' && t.type !== 'income') return false;
       if (selectedCategory !== 'All' && t.category !== selectedCategory) return false;
+      if (selectedSource !== 'All' && t.source !== selectedSource) return false;
       return true;
     });
-  }, [transactions, filterType, selectedCategory]);
+  }, [transactions, filterType, selectedCategory, selectedSource]);
 
   return (
     <KeyboardAvoidingView
@@ -381,7 +391,47 @@ export default function HomeScreen() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+          </ScrollView>
+
+            {/* Source (Card) horizontal pills */}
+            {sources.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[styles.categoryScroll, { marginTop: Spacing.two }]}>
+                <Pressable
+                  onPress={() => setSelectedSource('All')}
+                  style={[
+                    styles.categoryChip,
+                    selectedSource === 'All' && styles.categoryChipActive,
+                  ]}>
+                  <ThemedText
+                    style={[
+                      styles.categoryChipText,
+                      selectedSource === 'All' && styles.categoryChipTextActive,
+                    ]}>
+                    💳 All Cards
+                  </ThemedText>
+                </Pressable>
+                {sources.map((src) => {
+                  const isSelected = selectedSource === src;
+                  return (
+                    <Pressable
+                      key={src}
+                      onPress={() => setSelectedSource(src)}
+                      style={[styles.categoryChip, isSelected && styles.categoryChipActive]}>
+                      <ThemedText
+                        style={[
+                          styles.categoryChipText,
+                          isSelected && styles.categoryChipTextActive,
+                        ]}>
+                        💳 {src}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
 
           {/* Section Header */}

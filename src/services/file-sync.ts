@@ -49,30 +49,27 @@ export function parseBankSMS(text: string): Partial<Transaction> | null {
     /^(?:avail(?:able)?\s+bal|bal|current\s+bal|closing\s+bal|total\s+bal|otp|dear\s+customer|thank\s+you|regards)/i.test(
       trimmed
     ) &&
-    !/(?:debited|spent|charged|credited|paid|withdrawn|approved)/i.test(trimmed)
+    !/(?:debited|debit|spent|charged|credited|credit|paid|withdrawn|approved|txn)/i.test(trimmed)
   ) {
     return null;
   }
 
-  // Look for explicit transaction keywords + amount
-  const explicitMatch = trimmed.match(
-    /(?:debited\s*(?:by|for|with)?|spent|charged|paid|withdrawn|credited\s*(?:by|for|with)?|approved\s*(?:on\s+your\s+card\s+[0-9*]+\s+)?for)\s*(?:of|is|for)?\s*(?:LKR|RS\.?|USD|EUR|GBP|AUD|CAD|INR|\$)?\s*([\d,]+(?:\.\d{1,2})?)/i
-  );
-
+  // Extract amount
   let amount: number | null = null;
-  if (explicitMatch && explicitMatch[1]) {
-    amount = parseFloat(explicitMatch[1].replace(/,/g, ''));
+  const currencyAmountRegex = /(?:LKR|RS\.?|USD|EUR|GBP|AUD|CAD|INR|\$)\s*([\d,]+(?:\.\d{1,2})?)/gi;
+  let match;
+  let matches: number[] = [];
+  while ((match = currencyAmountRegex.exec(trimmed)) !== null) {
+      matches.push(parseFloat(match[1].replace(/,/g, '')));
   }
-
-  // Fallback to currency match before 'Avail' or 'Bal' or 'Call'
-  if (!amount) {
-    const textBeforeBal = trimmed.split(/(?:avail(?:able)?\s+bal|bal|ref\b|call\s+\d)/i)[0];
-    const currencyMatch = textBeforeBal.match(
-      /(?:LKR|RS\.?|USD|EUR|GBP|AUD|CAD|INR|\$)\s*([\d,]+(?:\.\d{1,2})?)/i
-    );
-    if (currencyMatch && currencyMatch[1]) {
-      amount = parseFloat(currencyMatch[1].replace(/,/g, ''));
-    }
+  
+  if (matches.length > 0) {
+      amount = matches[0];
+  } else {
+      const fallbackAmountMatch = trimmed.match(/(?:for|of|by)\s+([\d,]+(?:\.\d{1,2})?)/i);
+      if (fallbackAmountMatch && fallbackAmountMatch[1]) {
+          amount = parseFloat(fallbackAmountMatch[1].replace(/,/g, ''));
+      }
   }
 
   if (!amount || isNaN(amount) || amount <= 0) {
@@ -85,18 +82,24 @@ export function parseBankSMS(text: string): Partial<Transaction> | null {
 
   // Merchant detection
   let title = 'Expense';
-  const merchantMatch = trimmed.match(
-    /\b(?:at|to|in)\s+([A-Za-z0-9\s&'-]+?)(?:\s+(?:on|using|via|ref|bal|avail(?:able)?|dated|call\b)|[.,;]|$)/i
-  );
-  if (merchantMatch && merchantMatch[1]) {
-    title = merchantMatch[1].trim();
+  const atMatch = trimmed.match(/\b(?:at|to|in)\s+([A-Za-z0-9\s&'*-]+?)(?:\s+(?:on|using|via|ref|bal|avl|avail(?:able)?|dated|call|txn)\b|[.?!,;]|$)/i);
+  
+  if (atMatch && atMatch[1]) {
+    title = atMatch[1].trim();
   } else {
-    const cardMatch = trimmed.match(/([A-Za-z0-9]+\s+card|[A-Za-z0-9]+\s+bank)/i);
+    const cardMatch = trimmed.match(/([A-Za-z0-9]+\s+card|[A-Za-z0-9]+\s+bank|NTB|Seylan)/i);
     if (cardMatch) {
       title = cardMatch[1].trim();
     } else {
       title = isIncome ? 'Income' : 'Card Expense';
     }
+  }
+
+  // Source (Card/Account) detection
+  let source: string | undefined = undefined;
+  const sourceMatch = trimmed.match(/(?:your\s+)?((?:[A-Za-z0-9]+\s+)?(?:Card|A\/C|Account)\s+[\d*.]+|[A-Za-z0-9]+\s+Card\s+[\d*.]+)/i);
+  if (sourceMatch && sourceMatch[1]) {
+    source = sourceMatch[1].trim();
   }
 
   return {
@@ -105,6 +108,7 @@ export function parseBankSMS(text: string): Partial<Transaction> | null {
     type,
     category: inferCategory(title),
     date: Date.now(),
+    source,
   };
 }
 
@@ -271,6 +275,7 @@ export function syncDirectContent(
     category: c.category || 'Other',
     date: c.date || Date.now(),
     notes: 'Auto-synced',
+    source: c.source,
   }));
 
   return {
@@ -327,6 +332,7 @@ export async function autoSyncPendingFiles(
                 type: result.type || 'expense',
                 category: result.category || 'Other',
                 date: new Date(record.timestamp).getTime(),
+                source: result.source,
               });
             }
           }

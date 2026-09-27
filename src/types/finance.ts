@@ -9,6 +9,7 @@ export interface Transaction {
   title: string;
   category: string;
   date: number; // timestamp
+  source?: string; // Which card/bank was used
 }
 
 export interface DateFilter {

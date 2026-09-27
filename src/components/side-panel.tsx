@@ -190,21 +190,6 @@ export function SidePanel({
             <ThemedText style={styles.chevron}>›</ThemedText>
           </Pressable>
 
-          {/* Shortcut Records */}
-          <Pressable
-            onPress={() => {
-              onClose();
-              router.push('/records');
-            }}
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
-            <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(236, 72, 153, 0.12)' }]}>
-              <ThemedText style={styles.menuIcon}>📥</ThemedText>
-            </View>
-            <View style={styles.menuTextContainer}>
-              <ThemedText style={styles.menuTitle}>Shortcut Records</ThemedText>
-            </View>
-            <ThemedText style={styles.chevron}>›</ThemedText>
-          </Pressable>
 
           {/* Agreement */}
           <Pressable

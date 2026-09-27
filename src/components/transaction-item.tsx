@@ -100,6 +100,11 @@ export function TransactionItem({ transaction, currency = '$', onDelete, onEdit 
               <ThemedText type="small" themeColor="textSecondary" style={styles.categoryLabel}>
                 {meta.label}
               </ThemedText>
+              {transaction.source ? (
+                <ThemedText type="code" themeColor="textSecondary" style={styles.dateLabel}>
+                  • {transaction.source}
+                </ThemedText>
+              ) : null}
               <ThemedText type="code" themeColor="textSecondary" style={styles.dateLabel}>
                 • {formatDate(transaction.date)}
               </ThemedText>
