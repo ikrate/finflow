@@ -42,6 +42,7 @@ export interface AppSettings {
   currency: string;
   enableHaptics: boolean;
   cardNicknames?: Record<string, string>;
+  vendorCategories?: Record<string, Category>;
 }
 
 export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {
@@ -55,6 +56,7 @@ export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   currency: 'LKR',
   enableHaptics: true,
+  vendorCategories: {},
 };
 
 export const CURRENCIES = [

@@ -17,9 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
 import { AddTransactionModal } from '@/components/add-transaction-modal';
-import { AgreementModal } from '@/components/agreement-modal';
-import { AppSettingsModal } from '@/components/app-settings-modal';
-import { AutomationsModal } from '@/components/automations-modal';
 import { BalanceCard } from '@/components/balance-card';
 import { SidePanel } from '@/components/side-panel';
 import { ThemedText } from '@/components/themed-text';
@@ -45,7 +42,7 @@ import {
   TransactionFilter,
   TransactionType,
 } from '@/types/finance';
-import { ALL_CATEGORIES } from '@/utils/categories';
+import { ALL_CATEGORIES, findVendorCategory } from '@/utils/categories';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -90,11 +87,8 @@ export default function HomeScreen() {
   }, [fadeAnim]);
 
 
-  // Settings & Navigation Modals
+  // Navigation Drawer
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
-  const [isAutomationsOpen, setIsAutomationsOpen] = useState(false);
-  const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
-  const [isAgreementOpen, setIsAgreementOpen] = useState(false);
 
   const [automationConfig, setAutomationConfig] = useState<AutomationConfig>(DEFAULT_AUTOMATION_CONFIG);
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
@@ -107,7 +101,7 @@ export default function HomeScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Save',
-          onPress: (newName) => {
+          onPress: (newName?: string) => {
             if (newName && newName.trim()) {
               const updatedSettings = {
                 ...appSettings,
@@ -136,7 +130,7 @@ export default function HomeScreen() {
   const performAutoSync = useCallback(
     async (currentTransactions: Transaction[], showSuccess = true) => {
       try {
-        const result = await autoSyncPendingFiles(currentTransactions);
+        const result = await autoSyncPendingFiles(currentTransactions, appSettings.vendorCategories);
         if (result.importedCount > 0) {
           const updated = [...result.transactions, ...currentTransactions];
           setTransactions(updated);
@@ -151,7 +145,7 @@ export default function HomeScreen() {
         console.warn('[FinFlow] AutoSync error:', err);
       }
     },
-    []
+    [appSettings.vendorCategories]
   );
 
   // Pull-to-refresh handler
@@ -159,7 +153,7 @@ export default function HomeScreen() {
     setRefreshing(true);
     try {
       const currentTxList = await loadTransactions();
-      const result = await autoSyncPendingFiles(currentTxList);
+      const result = await autoSyncPendingFiles(currentTxList, appSettings.vendorCategories);
       if (result.importedCount > 0) {
         const updated = [...result.transactions, ...currentTxList];
         setTransactions(updated);
@@ -173,12 +167,13 @@ export default function HomeScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [appSettings.vendorCategories]);
 
-  // Reload transactions when screen comes into focus
+  // Reload transactions and settings when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadTransactions().then(setTransactions);
+      loadAppSettings().then(setAppSettings);
     }, [])
   );
 
@@ -215,7 +210,7 @@ export default function HomeScreen() {
         const textParam = parsed.queryParams?.text || parsed.queryParams?.tx;
         if (textParam && typeof textParam === 'string') {
           loadTransactions().then((currentTxList) => {
-            const directRes = syncDirectContent(textParam, currentTxList);
+            const directRes = syncDirectContent(textParam, currentTxList, appSettings.vendorCategories);
             if (directRes.importedCount > 0) {
               const updated = [...directRes.transactions, ...currentTxList];
               setTransactions(updated);
@@ -259,11 +254,42 @@ export default function HomeScreen() {
   }, [performAutoSync]);
 
   const handleAddTransaction = useCallback(
-    (data: { title: string; amount: number; type: TransactionType; category: Category }) => {
+    async (data: {
+      title: string;
+      amount: number;
+      type: TransactionType;
+      category: Category;
+      rememberVendorCategory?: boolean;
+    }) => {
+      // 1. Learn vendor default rule only for NEW transactions, without modifying existing rules or during edits
+      if (!editingTransaction && data.rememberVendorCategory && data.title.trim()) {
+        const cleanVendor = data.title.trim();
+        const existingRule = findVendorCategory(cleanVendor, appSettings.vendorCategories);
+        if (!existingRule) {
+          const updatedVendorCategories = {
+            ...(appSettings.vendorCategories || {}),
+            [cleanVendor]: data.category,
+          };
+          const updatedSettings: AppSettings = {
+            ...appSettings,
+            vendorCategories: updatedVendorCategories,
+          };
+          setAppSettings(updatedSettings);
+          await saveAppSettings(updatedSettings);
+        }
+      }
+
+      // 2. Update/create only THIS transaction
       if (editingTransaction) {
         const updated = transactions.map((t) =>
           t.id === editingTransaction.id
-            ? { ...t, ...data }
+            ? {
+                ...t,
+                title: data.title,
+                amount: data.amount,
+                type: data.type,
+                category: data.category,
+              }
             : t
         );
         updateAndPersist(updated);
@@ -281,7 +307,7 @@ export default function HomeScreen() {
         updateAndPersist(updated);
       }
     },
-    [transactions, updateAndPersist, editingTransaction]
+    [transactions, updateAndPersist, editingTransaction, appSettings]
   );
 
   const handleEdit = useCallback(
@@ -542,11 +568,13 @@ export default function HomeScreen() {
         onAdd={handleAddTransaction}
         currency={appSettings.currency}
         initialTransaction={editingTransaction}
+        vendorCategories={appSettings.vendorCategories}
       />
 
       {/* Slideable Left Panel */}
       <SidePanel
         visible={isSidePanelOpen}
+        onOpen={() => setIsSidePanelOpen(true)}
         onClose={() => setIsSidePanelOpen(false)}
         automationConfig={automationConfig}
       />

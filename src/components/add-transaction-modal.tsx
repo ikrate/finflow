@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -16,7 +16,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { Category, TransactionType, Transaction } from '@/types/finance';
-import { ALL_CATEGORIES, CATEGORY_MAP } from '@/utils/categories';
+import { ALL_CATEGORIES, CATEGORY_MAP, findVendorCategory, inferCategory } from '@/utils/categories';
 
 interface AddTransactionModalProps {
   visible: boolean;
@@ -26,12 +26,21 @@ interface AddTransactionModalProps {
     amount: number;
     type: TransactionType;
     category: Category;
+    rememberVendorCategory?: boolean;
   }) => void;
   currency?: string;
   initialTransaction?: Transaction | null;
+  vendorCategories?: Record<string, Category>;
 }
 
-export function AddTransactionModal({ visible, onClose, onAdd, currency = '$', initialTransaction }: AddTransactionModalProps) {
+export function AddTransactionModal({
+  visible,
+  onClose,
+  onAdd,
+  currency = '$',
+  initialTransaction,
+  vendorCategories,
+}: AddTransactionModalProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
 
@@ -39,39 +48,46 @@ export function AddTransactionModal({ visible, onClose, onAdd, currency = '$', i
   const [amountStr, setAmountStr] = useState('');
   const [title, setTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category>('Food');
+  const [userManuallySelectedCategory, setUserManuallySelectedCategory] = useState(false);
 
-  // Initialize fields if editing
+  // Initialize fields if editing or adding
   React.useEffect(() => {
     if (visible) {
       if (initialTransaction) {
         setType(initialTransaction.type);
         setAmountStr(initialTransaction.amount.toString());
         setTitle(initialTransaction.title);
-        setSelectedCategory(initialTransaction.category as Category || 'Other');
+        setSelectedCategory((initialTransaction.category as Category) || 'Other');
+        setUserManuallySelectedCategory(true);
       } else {
         setType('expense');
         setAmountStr('');
         setTitle('');
         setSelectedCategory('Food');
+        setUserManuallySelectedCategory(false);
       }
     }
   }, [visible, initialTransaction]);
 
-  // Auto-suggest category from title keywords
-  const suggestedCategory = useMemo(() => {
-    const lower = title.toLowerCase();
-    if (lower.includes('salary') || lower.includes('paycheck') || lower.includes('bonus')) return 'Salary';
-    if (lower.includes('uber') || lower.includes('lyft') || lower.includes('gas') || lower.includes('train') || lower.includes('bus')) return 'Transport';
-    if (lower.includes('food') || lower.includes('coffee') || lower.includes('lunch') || lower.includes('dinner') || lower.includes('grocery') || lower.includes('burger')) return 'Food';
-    if (lower.includes('movie') || lower.includes('netflix') || lower.includes('game') || lower.includes('concert')) return 'Entertainment';
-    if (lower.includes('rent') || lower.includes('bill') || lower.includes('electric') || lower.includes('water') || lower.includes('internet')) return 'Bills';
-    if (lower.includes('amazon') || lower.includes('cloth') || lower.includes('shoes') || lower.includes('shop')) return 'Shopping';
-    if (lower.includes('doctor') || lower.includes('med') || lower.includes('gym') || lower.includes('dentist')) return 'Health';
-    if (lower.includes('stock') || lower.includes('crypto') || lower.includes('dividend') || lower.includes('invest')) return 'Investments';
-    return null;
-  }, [title]);
+  const handleTitleChange = (newTitle: string) => {
+    setTitle(newTitle);
+    if (!userManuallySelectedCategory && newTitle.trim()) {
+      const vendorCat = findVendorCategory(newTitle, vendorCategories);
+      if (vendorCat) {
+        setSelectedCategory(vendorCat);
+      } else {
+        const inferred = inferCategory(newTitle);
+        if (inferred !== 'Other') {
+          setSelectedCategory(inferred);
+        }
+      }
+    }
+  };
 
-  const activeCategory = suggestedCategory ?? selectedCategory;
+  const handleCategoryPress = (cat: Category) => {
+    setSelectedCategory(cat);
+    setUserManuallySelectedCategory(true);
+  };
 
   const handleSubmit = () => {
     const parsedAmount = parseFloat(amountStr);
@@ -82,7 +98,8 @@ export function AddTransactionModal({ visible, onClose, onAdd, currency = '$', i
       title: title.trim(),
       amount: parsedAmount,
       type,
-      category: activeCategory,
+      category: selectedCategory,
+      rememberVendorCategory: !initialTransaction,
     });
 
     onClose();
@@ -145,8 +162,8 @@ export function AddTransactionModal({ visible, onClose, onAdd, currency = '$', i
             <View style={[styles.inputBox, { borderColor: theme.backgroundSelected }]}>
               <TextInput
                 value={title}
-                onChangeText={setTitle}
-                placeholder="What was this for? (e.g. Groceries)"
+                onChangeText={handleTitleChange}
+                placeholder="What was this for?"
                 placeholderTextColor={theme.textSecondary}
                 style={[styles.titleInput, { color: theme.text }]}
               />
@@ -159,15 +176,16 @@ export function AddTransactionModal({ visible, onClose, onAdd, currency = '$', i
               </ThemedText>
               <ScrollView
                 horizontal
+                keyboardShouldPersistTaps="always"
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.categoryScroll}>
                 {ALL_CATEGORIES.map((cat) => {
-                  const isSelected = activeCategory === cat;
+                  const isSelected = selectedCategory === cat;
                   const meta = CATEGORY_MAP[cat];
                   return (
                     <Pressable
                       key={cat}
-                      onPress={() => setSelectedCategory(cat)}
+                      onPress={() => handleCategoryPress(cat)}
                       style={[
                         styles.categoryChip,
                         isSelected && { backgroundColor: meta.color, borderColor: meta.color },
@@ -186,7 +204,7 @@ export function AddTransactionModal({ visible, onClose, onAdd, currency = '$', i
               </ScrollView>
             </View>
 
-            {/* Add Button */}
+            {/* Add / Save Button */}
             <Pressable
               onPress={handleSubmit}
               disabled={!amountStr.trim() || !title.trim()}

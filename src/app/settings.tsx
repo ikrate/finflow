@@ -1,7 +1,5 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,22 +12,39 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { loadAppSettings, saveAppSettings, clearAllTransactions } from '@/services/storage';
-import { DEFAULT_APP_SETTINGS, AppSettings, CURRENCIES } from '@/types/finance';
+import { DEFAULT_APP_SETTINGS, CURRENCIES } from '@/types/finance';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [settings, setSettings] = useState(DEFAULT_APP_SETTINGS);
-
-  useEffect(() => {
-    loadAppSettings().then(setSettings);
-  }, []);
   const theme = useTheme();
 
   const [confirmClearVisible, setConfirmClearVisible] = useState(false);
+
+  const loadData = useCallback(async () => {
+    const loaded = await loadAppSettings();
+    setSettings(loaded);
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const vendorEntries = useMemo(() => {
+    return Object.entries(settings.vendorCategories || {}).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    );
+  }, [settings.vendorCategories]);
 
   const handleSelectCurrency = async (curr: string) => {
     const updated = { ...settings, currency: curr };
@@ -139,6 +154,40 @@ export default function SettingsScreen() {
               </View>
             </ThemedView>
 
+            {/* Vendor Categories Navigation Row */}
+            <ThemedView type="backgroundElement" style={styles.card}>
+              <Pressable
+                onPress={() => router.push('/vendor-categories')}
+                style={({ pressed }) => [styles.vendorNavRow, pressed && styles.btnPressed]}>
+                <View style={styles.vendorNavLeft}>
+                  <View style={styles.vendorNavIconContainer}>
+                    <ThemedText style={styles.vendorNavIcon}>🏷️</ThemedText>
+                  </View>
+                  <View style={styles.vendorNavTextGroup}>
+                    <ThemedText type="smallBold" style={styles.vendorNavTitle}>
+                      Vendor Categories
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {vendorEntries.length === 0
+                        ? 'Set default categories for merchants'
+                        : `${vendorEntries.length} vendor rule${vendorEntries.length === 1 ? '' : 's'} configured`}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                <View style={styles.vendorNavRight}>
+                  {vendorEntries.length > 0 && (
+                    <View style={styles.vendorNavBadge}>
+                      <ThemedText style={styles.vendorNavBadgeText}>
+                        {vendorEntries.length}
+                      </ThemedText>
+                    </View>
+                  )}
+                  <ThemedText style={styles.vendorNavChevron}>›</ThemedText>
+                </View>
+              </Pressable>
+            </ThemedView>
+
             {/* Danger Zone: Clear Data */}
             <ThemedView type="backgroundElement" style={[styles.card, styles.dangerCard]}>
               <View style={styles.cardHeader}>
@@ -173,8 +222,16 @@ export default function SettingsScreen() {
               )}
             </ThemedView>
 
-            {/* App Info */}
+            {/* App Info & Terms */}
             <View style={styles.infoFooter}>
+              <Pressable
+                hitSlop={8}
+                onPress={() => router.push('/agreement')}
+                style={({ pressed }) => [styles.termsLink, pressed && styles.termsLinkPressed]}>
+                <ThemedText style={styles.termsLinkText}>
+                  Read Terms and Conditions
+                </ThemedText>
+              </Pressable>
               <ThemedText type="small" themeColor="textSecondary" style={styles.footerInfoText}>
                 FinFlow v1.0.0 • Local Storage • Offline First
               </ThemedText>
@@ -357,11 +414,76 @@ const styles = StyleSheet.create({
   infoFooter: {
     alignItems: 'center',
     paddingVertical: Spacing.two,
+    gap: 6,
+  },
+  termsLink: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  termsLinkPressed: {
+    opacity: 0.6,
+  },
+  termsLinkText: {
+    fontSize: 13,
+    color: '#3b82f6',
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   footerInfoText: {
     fontSize: 12,
   },
   btnPressed: {
     opacity: 0.8,
+  },
+  vendorNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  vendorNavLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    flex: 1,
+  },
+  vendorNavIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vendorNavIcon: {
+    fontSize: 18,
+  },
+  vendorNavTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  vendorNavTitle: {
+    fontSize: 15,
+  },
+  vendorNavRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  vendorNavBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  vendorNavBadgeText: {
+    color: '#3b82f6',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  vendorNavChevron: {
+    fontSize: 20,
+    color: '#94a3b8',
+    fontWeight: '300',
   },
 });

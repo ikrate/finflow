@@ -31,7 +31,52 @@ export const ALL_CATEGORIES: Category[] = [
   'Other',
 ];
 
-export function inferCategory(text: string): Category {
+export function findVendorCategory(
+  title: string,
+  vendorCategories?: Record<string, Category>
+): Category | null {
+  if (!title || !vendorCategories) return null;
+  const cleanTitle = title.trim().toLowerCase();
+  if (!cleanTitle) return null;
+
+  // 1. Exact match (case-insensitive)
+  for (const [vendor, cat] of Object.entries(vendorCategories)) {
+    if (vendor.trim().toLowerCase() === cleanTitle) {
+      return cat;
+    }
+  }
+
+  // 2. Substring match: title contains vendor name or vendor name contains title
+  // Sort vendor names by length descending to match the most specific vendor first
+  const entries = Object.entries(vendorCategories).sort(
+    (a, b) => b[0].trim().length - a[0].trim().length
+  );
+
+  for (const [vendor, cat] of entries) {
+    const cleanVendor = vendor.trim().toLowerCase();
+    if (cleanVendor.length >= 3) {
+      if (cleanTitle.includes(cleanVendor) || cleanVendor.includes(cleanTitle)) {
+        return cat;
+      }
+    }
+  }
+
+  return null;
+}
+
+export function inferCategory(
+  text: string,
+  vendorCategories?: Record<string, Category>
+): Category {
+  if (!text) return 'Other';
+
+  // 1. First check remembered vendor rules
+  const vendorMatch = findVendorCategory(text, vendorCategories);
+  if (vendorMatch) {
+    return vendorMatch;
+  }
+
+  // 2. Fall back to keyword-based heuristics
   const lower = text.toLowerCase();
   if (lower.includes('salary') || lower.includes('paycheck') || lower.includes('wage') || lower.includes('bonus')) return 'Salary';
   if (lower.includes('uber') || lower.includes('pickme') || lower.includes('lyft') || lower.includes('gas') || lower.includes('fuel') || lower.includes('train') || lower.includes('bus') || lower.includes('metro') || lower.includes('toll')) return 'Transport';
@@ -43,4 +88,5 @@ export function inferCategory(text: string): Category {
   if (lower.includes('stock') || lower.includes('crypto') || lower.includes('dividend') || lower.includes('invest') || lower.includes('etf')) return 'Investments';
   return 'Other';
 }
+
 

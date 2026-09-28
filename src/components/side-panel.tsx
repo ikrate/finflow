@@ -22,6 +22,7 @@ const PANEL_WIDTH = Math.min(320, Dimensions.get('window').width * 0.82);
 interface SidePanelProps {
   visible: boolean;
   onClose: () => void;
+  onOpen?: () => void;
   automationConfig: AutomationConfig;
 }
 
@@ -30,6 +31,7 @@ import { useRouter } from 'expo-router';
 export function SidePanel({
   visible,
   onClose,
+  onOpen,
   automationConfig,
 }: SidePanelProps) {
   const insets = useSafeAreaInsets();
@@ -38,8 +40,9 @@ export function SidePanel({
   const [isRendered, setIsRendered] = useState(visible);
   const slideAnim = useRef(new Animated.Value(-PANEL_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const isDraggingEdge = useRef(false);
 
-  // Add PanResponder for dragging
+  // PanResponder for dragging left to close when drawer is open
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
@@ -49,6 +52,8 @@ export function SidePanel({
       onPanResponderMove: (_, gestureState) => {
         if (gestureState.dx < 0) {
           slideAnim.setValue(gestureState.dx);
+          const progress = Math.max(0, 1 + gestureState.dx / PANEL_WIDTH);
+          fadeAnim.setValue(progress);
         }
       },
       onPanResponderRelease: (_, gestureState) => {
@@ -56,16 +61,98 @@ export function SidePanel({
           onClose();
         } else {
           // Snap back
-          Animated.spring(slideAnim, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
+          Animated.parallel([
+            Animated.spring(slideAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+            }),
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+          ]).start();
         }
       },
     })
   ).current;
 
+  // Edge PanResponder: swiping right from the leftmost edge opens the drawer
+  const edgePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return gestureState.dx > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.3;
+      },
+      onPanResponderGrant: () => {
+        isDraggingEdge.current = true;
+        setIsRendered(true);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx > 0) {
+          const currentX = Math.min(0, -PANEL_WIDTH + gestureState.dx);
+          slideAnim.setValue(currentX);
+          const progress = Math.min(1, Math.max(0, gestureState.dx / (PANEL_WIDTH * 0.8)));
+          fadeAnim.setValue(progress);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        isDraggingEdge.current = false;
+        if (gestureState.dx > 60 || gestureState.vx > 0.35) {
+          Animated.parallel([
+            Animated.spring(slideAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+              bounciness: 0,
+            }),
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start();
+          onOpen?.();
+        } else {
+          Animated.parallel([
+            Animated.timing(slideAnim, {
+              toValue: -PANEL_WIDTH,
+              duration: 180,
+              useNativeDriver: true,
+            }),
+            Animated.timing(fadeAnim, {
+              toValue: 0,
+              duration: 180,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            setIsRendered(false);
+          });
+        }
+      },
+      onPanResponderTerminate: () => {
+        isDraggingEdge.current = false;
+        Animated.parallel([
+          Animated.timing(slideAnim, {
+            toValue: -PANEL_WIDTH,
+            duration: 180,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 180,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setIsRendered(false);
+        });
+      },
+    })
+  ).current;
+
   useEffect(() => {
+    if (isDraggingEdge.current) return;
+
     if (visible) {
       setIsRendered(true);
       Animated.parallel([
@@ -107,125 +194,111 @@ export function SidePanel({
     return () => backHandler.remove();
   }, [visible, onClose]);
 
-  if (!isRendered) return null;
-
   return (
-    <View style={styles.container}>
-      {/* Backdrop */}
-      <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      </Animated.View>
+    <>
+      {/* Edge Swipe Detector Strip (Active when drawer is closed) */}
+      {!visible && (
+        <View
+          style={styles.edgeDetector}
+          {...edgePanResponder.panHandlers}
+        />
+      )}
 
-      {/* Slideable Panel */}
-      <Animated.View
-        {...panResponder.panHandlers}
-        style={[
-          styles.panel,
-          {
-            width: PANEL_WIDTH,
-            backgroundColor: theme.background,
-            paddingTop: Math.max(insets.top, Spacing.four),
-            paddingBottom: Math.max(insets.bottom, Spacing.four),
-            transform: [{ translateX: slideAnim }],
-          },
-        ]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.brandRow}>
-            <View style={styles.logoBadge}>
-              <ThemedText style={styles.logoText}>F</ThemedText>
-            </View>
-            <View>
-              <ThemedText style={styles.brandTitle}>FinFlow</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.versionText}>
-                v1.0.0 • On-Device
-              </ThemedText>
-            </View>
-          </View>
-          <Pressable hitSlop={12} onPress={onClose} style={styles.closeBtn}>
-            <ThemedText style={styles.closeIcon}>✕</ThemedText>
-          </Pressable>
-        </View>
+      {/* Full Drawer & Backdrop (Rendered when open or animating) */}
+      {isRendered && (
+        <View style={styles.container}>
+          {/* Backdrop */}
+          <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+          </Animated.View>
 
-        <View style={styles.divider} />
-
-        {/* Navigation Menu */}
-        <View style={styles.menuList}>
-          {/* Automations */}
-          <Pressable
-            onPress={() => {
-              onClose();
-              router.push('/automations');
-            }}
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
-            <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
-              <ThemedText style={styles.menuIcon}>⚡</ThemedText>
-            </View>
-            <View style={styles.menuTextContainer}>
-              <View style={styles.menuTitleRow}>
-                <ThemedText style={styles.menuTitle}>Automations</ThemedText>
-                {automationConfig.fileUri ? (
-                  <View style={styles.activePill}>
-                    <ThemedText style={styles.activePillText}>Active</ThemedText>
-                  </View>
-                ) : null}
+          {/* Slideable Panel */}
+          <Animated.View
+            {...panResponder.panHandlers}
+            style={[
+              styles.panel,
+              {
+                width: PANEL_WIDTH,
+                backgroundColor: theme.background,
+                paddingTop: Math.max(insets.top, Spacing.four),
+                paddingBottom: Math.max(insets.bottom, Spacing.four),
+                transform: [{ translateX: slideAnim }],
+              },
+            ]}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.brandRow}>
+                <View style={styles.logoBadge}>
+                  <ThemedText style={styles.logoText}>F</ThemedText>
+                </View>
+                <View>
+                  <ThemedText style={styles.brandTitle}>FinFlow</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.versionText}>
+                    v1.0.0 • On-Device
+                  </ThemedText>
+                </View>
               </View>
+              <Pressable hitSlop={12} onPress={onClose} style={styles.closeBtn}>
+                <ThemedText style={styles.closeIcon}>✕</ThemedText>
+              </Pressable>
             </View>
-            <ThemedText style={styles.chevron}>›</ThemedText>
-          </Pressable>
 
-          {/* App Settings */}
-          <Pressable
-            onPress={() => {
-              onClose();
-              router.push('/settings');
-            }}
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
-            <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
-              <ThemedText style={styles.menuIcon}>⚙️</ThemedText>
-            </View>
-            <View style={styles.menuTextContainer}>
-              <ThemedText style={styles.menuTitle}>App Settings</ThemedText>
-            </View>
-            <ThemedText style={styles.chevron}>›</ThemedText>
-          </Pressable>
+            <View style={styles.divider} />
 
+            {/* Navigation Menu */}
+            <View style={styles.menuList}>
+              {/* Automations */}
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  router.push('/automations');
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
+                <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                  <ThemedText style={styles.menuIcon}>⚡</ThemedText>
+                </View>
+                <View style={styles.menuTextContainer}>
+                  <ThemedText style={styles.menuTitle}>Automations</ThemedText>
+                </View>
+                <ThemedText style={styles.chevron}>›</ThemedText>
+              </Pressable>
 
-          {/* Agreement */}
-          <Pressable
-            onPress={() => {
-              onClose();
-              router.push('/agreement');
-            }}
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
-            <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-              <ThemedText style={styles.menuIcon}>📄</ThemedText>
-            </View>
-            <View style={styles.menuTextContainer}>
-              <ThemedText style={styles.menuTitle}>Agreement</ThemedText>
-            </View>
-            <ThemedText style={styles.chevron}>›</ThemedText>
-          </Pressable>
+              {/* App Settings */}
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  router.push('/settings');
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
+                <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
+                  <ThemedText style={styles.menuIcon}>⚙️</ThemedText>
+                </View>
+                <View style={styles.menuTextContainer}>
+                  <ThemedText style={styles.menuTitle}>App Settings</ThemedText>
+                </View>
+                <ThemedText style={styles.chevron}>›</ThemedText>
+              </Pressable>
 
-          {/* Balances */}
-          <Pressable
-            onPress={() => {
-              onClose();
-              router.push('/balances');
-            }}
-            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
-            <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-              <ThemedText style={styles.menuIcon}>📊</ThemedText>
+              {/* Balances */}
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  router.push('/balances');
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
+                <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                  <ThemedText style={styles.menuIcon}>📊</ThemedText>
+                </View>
+                <View style={styles.menuTextContainer}>
+                  <ThemedText style={styles.menuTitle}>Balances</ThemedText>
+                </View>
+                <ThemedText style={styles.chevron}>›</ThemedText>
+              </Pressable>
             </View>
-            <View style={styles.menuTextContainer}>
-              <ThemedText style={styles.menuTitle}>Balances</ThemedText>
-            </View>
-            <ThemedText style={styles.chevron}>›</ThemedText>
-          </Pressable>
+          </Animated.View>
         </View>
-
-        </Animated.View>
-      </View>
+      )}
+    </>
   );
 }
 
@@ -325,53 +398,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  menuTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   menuTitle: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  activePill: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-  },
-  activePillText: {
-    color: '#10b981',
-    fontSize: 10,
-    fontWeight: '700',
   },
   chevron: {
     fontSize: 20,
     color: '#94a3b8',
     fontWeight: '300',
   },
-  footer: {
-    paddingTop: Spacing.three,
-  },
-  privacyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.two,
-  },
-  privacyIcon: {
-    fontSize: 20,
-  },
-  privacyTextGroup: {
-    flex: 1,
-    gap: 2,
-  },
-  privacyTitle: {
-    fontSize: 12,
-  },
-  privacyDesc: {
-    fontSize: 11,
-    lineHeight: 15,
+  edgeDetector: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 30,
+    zIndex: 110,
   },
 });

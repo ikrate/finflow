@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppSettings, AutomationConfig, Transaction } from '@/types/finance';
+import { AppSettings, AutomationConfig, Category, Transaction } from '@/types/finance';
 
 const STORAGE_KEY = '@finflow_transactions_v1';
 
@@ -67,6 +67,7 @@ const SETTINGS_KEY = '@finflow_app_settings_v1';
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   currency: '$',
   enableHaptics: true,
+  vendorCategories: {},
 };
 
 export async function loadAppSettings(): Promise<AppSettings> {
@@ -88,4 +89,37 @@ export async function saveAppSettings(settings: AppSettings): Promise<void> {
     console.warn('Failed to save app settings', err);
   }
 }
+
+export async function saveVendorCategory(vendor: string, category: Category): Promise<AppSettings> {
+  const current = await loadAppSettings();
+  const trimmed = vendor.trim();
+  if (!trimmed) return current;
+
+  const updated: AppSettings = {
+    ...current,
+    vendorCategories: {
+      ...(current.vendorCategories || {}),
+      [trimmed]: category,
+    },
+  };
+  await saveAppSettings(updated);
+  return updated;
+}
+
+export async function deleteVendorCategory(vendor: string): Promise<AppSettings> {
+  const current = await loadAppSettings();
+  const trimmed = vendor.trim();
+  if (!current.vendorCategories || !trimmed) return current;
+
+  const copy = { ...current.vendorCategories };
+  delete copy[trimmed];
+
+  const updated: AppSettings = {
+    ...current,
+    vendorCategories: copy,
+  };
+  await saveAppSettings(updated);
+  return updated;
+}
+
 

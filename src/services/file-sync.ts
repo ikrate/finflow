@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Category, Transaction, TransactionType } from '@/types/finance';
-import { ALL_CATEGORIES, inferCategory } from '@/utils/categories';
+import { ALL_CATEGORIES, findVendorCategory, inferCategory } from '@/utils/categories';
+import { loadAppSettings } from '@/services/storage';
 import FinflowIntentsModule from '../../modules/finflow-intents/src/FinflowIntentsModule';
 
 export interface SyncResult {
@@ -40,7 +41,7 @@ export function extractAmount(str: string): number | null {
  * "NTB card debited by LKR 100"
  * "Transaction Approved on your Card 376657***2137 for LKR 2500.00 at DAMITH ENTERPRISE Available Bal LKR 139619.20"
  */
-export function parseBankSMS(text: string): Partial<Transaction> | null {
+export function parseBankSMS(text: string, vendorCategories?: Record<string, Category>): Partial<Transaction> | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
 
@@ -106,13 +107,13 @@ export function parseBankSMS(text: string): Partial<Transaction> | null {
     title,
     amount,
     type,
-    category: inferCategory(title),
+    category: inferCategory(title, vendorCategories),
     date: Date.now(),
     source,
   };
 }
 
-export function parseLine(line: string): Partial<Transaction> | null {
+export function parseLine(line: string, vendorCategories?: Record<string, Category>): Partial<Transaction> | null {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith('#')) return null;
 
@@ -130,7 +131,7 @@ export function parseLine(line: string): Partial<Transaction> | null {
     /(?:debited|credited|spent|charged|approved|lkr|usd|inr|eur|card)/i.test(trimmed) &&
     !trimmed.startsWith('{')
   ) {
-    const smsParsed = parseBankSMS(trimmed);
+    const smsParsed = parseBankSMS(trimmed, vendorCategories);
     if (smsParsed && smsParsed.amount) {
       return smsParsed;
     }
@@ -148,7 +149,7 @@ export function parseLine(line: string): Partial<Transaction> | null {
         const category: Category =
           rawCat && (ALL_CATEGORIES as readonly string[]).includes(rawCat)
             ? (rawCat as Category)
-            : inferCategory(title);
+            : inferCategory(title, vendorCategories);
 
         const date = obj.date ? new Date(obj.date).getTime() : Date.now();
 
@@ -239,7 +240,7 @@ export function parseLine(line: string): Partial<Transaction> | null {
     title: title || 'Expense',
     amount,
     type,
-    category: category || inferCategory(title),
+    category: category || inferCategory(title, vendorCategories),
     date,
   };
 }
@@ -249,7 +250,8 @@ export function parseLine(line: string): Partial<Transaction> | null {
  */
 export function syncDirectContent(
   content: string,
-  existingTransactions: Transaction[]
+  existingTransactions: Transaction[],
+  vendorCategories?: Record<string, Category>
 ): SyncResult {
   const parsedCandidates: Partial<Transaction>[] = [];
   let totalLinesRead = 0;
@@ -260,7 +262,7 @@ export function syncDirectContent(
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('#')) continue;
       totalLinesRead++;
-      const parsed = parseLine(trimmed);
+      const parsed = parseLine(trimmed, vendorCategories);
       if (parsed && parsed.amount && parsed.title) {
         parsedCandidates.push(parsed);
       }
@@ -299,11 +301,22 @@ export function syncDirectContent(
  * Shortcuts appends lines, the app consumes them and empties the file.
  */
 export async function autoSyncPendingFiles(
-  _existingTransactions: Transaction[]
+  _existingTransactions: Transaction[],
+  vendorCategories?: Record<string, Category>
 ): Promise<SyncResult> {
   const allImported: Transaction[] = [];
   let totalLines = 0;
   let lastError: string | undefined;
+
+  let activeVendorCategories = vendorCategories;
+  if (!activeVendorCategories) {
+    try {
+      const settings = await loadAppSettings();
+      activeVendorCategories = settings.vendorCategories;
+    } catch {
+      activeVendorCategories = undefined;
+    }
+  }
 
   // 1. Sync from iOS Native App Intents (Shortcut Storage)
   try {
@@ -313,17 +326,24 @@ export async function autoSyncPendingFiles(
         for (const record of records) {
           // If valid structured data
           if (record.amount !== undefined && record.amount > 0) {
+            const title = record.text || record.category || 'Shortcut Input';
+            const category: Category =
+              findVendorCategory(title, activeVendorCategories) ||
+              ((record.category && (ALL_CATEGORIES as readonly string[]).includes(record.category))
+                ? (record.category as Category)
+                : 'Other');
+
             allImported.push({
               id: `intent_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-              title: record.text || record.category || 'Shortcut Input',
+              title,
               amount: record.amount,
               type: 'expense',
-              category: (record.category as Category) || 'Other',
+              category,
               date: new Date(record.timestamp).getTime(),
             });
           } else {
             // Fallback to parse Bank SMS if amount wasn't provided natively
-            const result = parseLine(record.text);
+            const result = parseLine(record.text, activeVendorCategories);
             if (result && result.amount && result.title) {
               allImported.push({
                 id: `intent_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
