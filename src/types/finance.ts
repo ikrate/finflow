@@ -1,6 +1,6 @@
 export type TransactionType = 'income' | 'expense';
 
-export type Category = 'Food' | 'Transport' | 'Shopping' | 'Entertainment' | 'Bills' | 'Salary' | 'Investments' | 'Health' | 'Other';
+export type Category = 'Food' | 'Transport' | 'Shopping' | 'Entertainment' | 'Bills' | 'Salary' | 'Investments' | 'Health' | 'Fuel' | 'Other';
 
 export interface Transaction {
   id: string;

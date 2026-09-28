@@ -16,6 +16,7 @@ export const CATEGORY_MAP: Record<Category, CategoryMeta> = {
   Salary: { label: 'Salary & Wage', icon: '💼', color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)' },
   Investments: { label: 'Investments', icon: '📈', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.12)' },
   Health: { label: 'Health & Medical', icon: '💊', color: '#14b8a6', bg: 'rgba(20, 184, 166, 0.12)' },
+  Fuel: { label: 'Fuel & Gas', icon: '⛽', color: '#f97316', bg: 'rgba(249, 115, 22, 0.12)' },
   Other: { label: 'Other', icon: '📦', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)' },
 };
 
@@ -28,6 +29,7 @@ export const ALL_CATEGORIES: Category[] = [
   'Salary',
   'Investments',
   'Health',
+  'Fuel',
   'Other',
 ];
 
@@ -79,7 +81,8 @@ export function inferCategory(
   // 2. Fall back to keyword-based heuristics
   const lower = text.toLowerCase();
   if (lower.includes('salary') || lower.includes('paycheck') || lower.includes('wage') || lower.includes('bonus')) return 'Salary';
-  if (lower.includes('uber') || lower.includes('pickme') || lower.includes('lyft') || lower.includes('gas') || lower.includes('fuel') || lower.includes('train') || lower.includes('bus') || lower.includes('metro') || lower.includes('toll')) return 'Transport';
+  if (lower.includes('fuel') || lower.includes('petrol') || lower.includes('diesel') || lower.includes('gas station') || lower.includes('filling station') || lower.includes('shed') || lower.includes('ceypetco') || lower.includes('ioc') || lower.includes('sinopec') || lower.includes('shell') || lower.includes('octane') || lower.includes('auto gas')) return 'Fuel';
+  if (lower.includes('uber') || lower.includes('pickme') || lower.includes('lyft') || lower.includes('train') || lower.includes('bus') || lower.includes('metro') || lower.includes('toll')) return 'Transport';
   if (lower.includes('food') || lower.includes('coffee') || lower.includes('lunch') || lower.includes('dinner') || lower.includes('breakfast') || lower.includes('grocery') || lower.includes('groceries') || lower.includes('burger') || lower.includes('restaurant') || lower.includes('starbucks') || lower.includes('mcdonald') || lower.includes('keells') || lower.includes('cargills') || lower.includes('spar') || lower.includes('pizza')) return 'Food';
   if (lower.includes('movie') || lower.includes('netflix') || lower.includes('spotify') || lower.includes('game') || lower.includes('concert') || lower.includes('cinema') || lower.includes('theatre')) return 'Entertainment';
   if (lower.includes('rent') || lower.includes('bill') || lower.includes('electric') || lower.includes('water') || lower.includes('internet') || lower.includes('utility') || lower.includes('wifi') || lower.includes('dialog') || lower.includes('mobitel') || lower.includes('ceb')) return 'Bills';

@@ -1,17 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   AppState,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
+import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -20,6 +22,7 @@ import { AddTransactionModal } from '@/components/add-transaction-modal';
 import { BalanceCard } from '@/components/balance-card';
 import { SidePanel } from '@/components/side-panel';
 import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
 import { TransactionItem } from '@/components/transaction-item';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -93,33 +96,47 @@ export default function HomeScreen() {
   const [automationConfig, setAutomationConfig] = useState<AutomationConfig>(DEFAULT_AUTOMATION_CONFIG);
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
 
-  const handleRenameCard = useCallback((sourceId: string, currentName: string) => {
-    Alert.prompt(
-      'Nickname Card',
-      `Enter a nickname for ${sourceId}:`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Save',
-          onPress: (newName?: string) => {
-            if (newName && newName.trim()) {
-              const updatedSettings = {
-                ...appSettings,
-                cardNicknames: {
-                  ...(appSettings.cardNicknames || {}),
-                  [sourceId]: newName.trim()
-                }
-              };
-              setAppSettings(updatedSettings);
-              saveAppSettings(updatedSettings);
-            }
-          }
-        }
-      ],
-      'plain-text',
-      currentName !== sourceId ? currentName : ''
-    );
-  }, [appSettings]);
+  // Card Nickname Modal state
+  const [editingCardSource, setEditingCardSource] = useState<string | null>(null);
+  const [cardNicknameInput, setCardNicknameInput] = useState('');
+
+  const handleOpenNicknameModal = useCallback((sourceId: string, currentName: string) => {
+    setEditingCardSource(sourceId);
+    setCardNicknameInput(currentName !== sourceId ? currentName : '');
+  }, []);
+
+  const handleSaveCardNickname = useCallback(async () => {
+    if (!editingCardSource) return;
+    const trimmed = cardNicknameInput.trim();
+    const updatedNicknames = { ...(appSettings.cardNicknames || {}) };
+    if (trimmed) {
+      updatedNicknames[editingCardSource] = trimmed;
+    } else {
+      delete updatedNicknames[editingCardSource];
+    }
+    const updatedSettings = {
+      ...appSettings,
+      cardNicknames: updatedNicknames,
+    };
+    setAppSettings(updatedSettings);
+    await saveAppSettings(updatedSettings);
+    setEditingCardSource(null);
+    setCardNicknameInput('');
+  }, [editingCardSource, cardNicknameInput, appSettings]);
+
+  const handleRemoveCardNickname = useCallback(async () => {
+    if (!editingCardSource) return;
+    const updatedNicknames = { ...(appSettings.cardNicknames || {}) };
+    delete updatedNicknames[editingCardSource];
+    const updatedSettings = {
+      ...appSettings,
+      cardNicknames: updatedNicknames,
+    };
+    setAppSettings(updatedSettings);
+    await saveAppSettings(updatedSettings);
+    setEditingCardSource(null);
+    setCardNicknameInput('');
+  }, [editingCardSource, appSettings]);
 
   const updateAndPersist = useCallback((updated: Transaction[]) => {
     setTransactions(updated);
@@ -454,6 +471,8 @@ export default function HomeScreen() {
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="always"
+                nestedScrollEnabled={true}
                 contentContainerStyle={[styles.categoryScroll, { marginTop: Spacing.two }]}>
                 <Pressable
                   onPress={() => setSelectedSource('All')}
@@ -473,10 +492,11 @@ export default function HomeScreen() {
                   const isSelected = selectedSource === src;
                   const displayName = appSettings.cardNicknames?.[src] || src;
                   return (
-                    <Pressable
+                    <GHPressable
                       key={src}
+                      delayLongPress={300}
                       onPress={() => setSelectedSource(src)}
-                      onLongPress={() => handleRenameCard(src, displayName)}
+                      onLongPress={() => handleOpenNicknameModal(src, displayName)}
                       style={[styles.categoryChip, isSelected && styles.categoryChipActive]}>
                       <ThemedText
                         style={[
@@ -485,7 +505,7 @@ export default function HomeScreen() {
                         ]}>
                         💳 {displayName}
                       </ThemedText>
-                    </Pressable>
+                    </GHPressable>
                   );
                 })}
               </ScrollView>
@@ -578,6 +598,57 @@ export default function HomeScreen() {
         onClose={() => setIsSidePanelOpen(false)}
         automationConfig={automationConfig}
       />
+
+      {/* Card Nickname Modal */}
+      <Modal visible={editingCardSource !== null} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ width: '100%', alignItems: 'center' }}>
+            <ThemedView type="backgroundElement" style={styles.modalContent}>
+              <ThemedText type="title" style={{ fontSize: 20 }}>
+                Card Nickname
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Set a custom nickname for {editingCardSource}
+              </ThemedText>
+
+              <View style={styles.modalInputContainer}>
+                <TextInput
+                  value={cardNicknameInput}
+                  onChangeText={setCardNicknameInput}
+                  placeholder="e.g. Work Card, Main Debit, Savings"
+                  placeholderTextColor="#94a3b8"
+                  style={[styles.modalTextInput, { color: theme.text }]}
+                  autoFocus
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={styles.modalBtnRow}>
+                {appSettings.cardNicknames?.[editingCardSource || ''] ? (
+                  <Pressable onPress={handleRemoveCardNickname} style={styles.btnDanger}>
+                    <ThemedText style={styles.btnDangerText}>Remove</ThemedText>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={() => {
+                      setEditingCardSource(null);
+                      setCardNicknameInput('');
+                    }}
+                    style={styles.btnCancel}>
+                    <ThemedText style={styles.btnCancelText}>Cancel</ThemedText>
+                  </Pressable>
+                )}
+
+                <Pressable onPress={handleSaveCardNickname} style={styles.btnApply}>
+                  <ThemedText style={styles.btnApplyText}>Save</ThemedText>
+                </Pressable>
+              </View>
+            </ThemedView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -759,5 +830,68 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     lineHeight: 38,
     marginTop: -2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: Spacing.four,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    padding: Spacing.four,
+    borderRadius: Spacing.three,
+    gap: Spacing.three,
+  },
+  modalInputContainer: {
+    width: '100%',
+  },
+  modalTextInput: {
+    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  btnCancel: {
+    flex: 1,
+    backgroundColor: 'rgba(150, 150, 150, 0.15)',
+    paddingVertical: 12,
+    borderRadius: Spacing.two,
+    alignItems: 'center',
+  },
+  btnCancelText: {
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  btnDanger: {
+    flex: 1,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    paddingVertical: 12,
+    borderRadius: Spacing.two,
+    alignItems: 'center',
+  },
+  btnDangerText: {
+    color: '#ef4444',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  btnApply: {
+    flex: 1,
+    backgroundColor: '#3b82f6',
+    paddingVertical: 12,
+    borderRadius: Spacing.two,
+    alignItems: 'center',
+  },
+  btnApplyText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
