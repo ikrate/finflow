@@ -206,6 +206,22 @@ export function SidePanel({
             </View>
             <ThemedText style={styles.chevron}>›</ThemedText>
           </Pressable>
+
+          {/* Balances */}
+          <Pressable
+            onPress={() => {
+              onClose();
+              router.push('/balances');
+            }}
+            style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
+            <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+              <ThemedText style={styles.menuIcon}>📊</ThemedText>
+            </View>
+            <View style={styles.menuTextContainer}>
+              <ThemedText style={styles.menuTitle}>Balances</ThemedText>
+            </View>
+            <ThemedText style={styles.chevron}>›</ThemedText>
+          </Pressable>
         </View>
 
         </Animated.View>
