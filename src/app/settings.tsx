@@ -4,6 +4,7 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,12 +16,15 @@ import { useTheme } from '@/hooks/use-theme';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { loadAppSettings, saveAppSettings, clearAllTransactions } from '@/services/storage';
+import { updateProfileNameAcrossGroups } from '@/services/groups/storage';
 import { DEFAULT_APP_SETTINGS, CURRENCIES } from '@/types/finance';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [settings, setSettings] = useState(DEFAULT_APP_SETTINGS);
+  const [profileNameInput, setProfileNameInput] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
   const theme = useTheme();
 
   const [confirmClearVisible, setConfirmClearVisible] = useState(false);
@@ -28,6 +32,7 @@ export default function SettingsScreen() {
   const loadData = useCallback(async () => {
     const loaded = await loadAppSettings();
     setSettings(loaded);
+    setProfileNameInput(loaded.profileName || '');
   }, []);
 
   useEffect(() => {
@@ -56,6 +61,18 @@ export default function SettingsScreen() {
     const updated = { ...settings, enableHaptics: enabled };
     await saveAppSettings(updated);
     setSettings(updated);
+  };
+
+  const handleSaveProfileName = async () => {
+    const trimmed = profileNameInput.trim();
+    if (!trimmed || trimmed === settings.profileName) return;
+    setIsSavingName(true);
+    try {
+      await updateProfileNameAcrossGroups(trimmed);
+      setSettings((prev) => ({ ...prev, profileName: trimmed }));
+    } finally {
+      setIsSavingName(false);
+    }
   };
 
   const executeClear = async () => {
@@ -151,6 +168,46 @@ export default function SettingsScreen() {
                   trackColor={{ false: '#64748b', true: '#3b82f6' }}
                   thumbColor="#ffffff"
                 />
+              </View>
+            </ThemedView>
+
+            {/* Group Profile Name */}
+            <ThemedView type="backgroundElement" style={styles.card}>
+              <View style={styles.cardHeader}>
+                <ThemedText style={styles.cardIcon}>👤</ThemedText>
+                <ThemedText type="smallBold">GROUPS DISPLAY NAME</ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary" style={{ marginBottom: Spacing.two }}>
+                How other group members see you on this device.
+              </ThemedText>
+              <View style={{ flexDirection: 'row', gap: Spacing.two, alignItems: 'center' }}>
+                <TextInput
+                  value={profileNameInput}
+                  onChangeText={setProfileNameInput}
+                  placeholder="e.g. Alex"
+                  placeholderTextColor="#94a3b8"
+                  maxLength={30}
+                  style={[
+                    styles.nameInput,
+                    {
+                      color: theme.text,
+                      backgroundColor: theme.background,
+                      borderColor: 'rgba(150, 150, 150, 0.25)',
+                    },
+                  ]}
+                />
+                <Pressable
+                  onPress={handleSaveProfileName}
+                  disabled={isSavingName || !profileNameInput.trim() || profileNameInput.trim() === settings.profileName}
+                  style={({ pressed }) => [
+                    styles.saveNameBtn,
+                    (!profileNameInput.trim() || profileNameInput.trim() === settings.profileName) && styles.saveNameBtnDisabled,
+                    pressed && { opacity: 0.7 },
+                  ]}>
+                  <ThemedText style={styles.saveNameBtnText}>
+                    {isSavingName ? '...' : 'Save'}
+                  </ThemedText>
+                </Pressable>
               </View>
             </ThemedView>
 
@@ -485,5 +542,29 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#94a3b8',
     fontWeight: '300',
+  },
+  nameInput: {
+    flex: 1,
+    height: 42,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 15,
+  },
+  saveNameBtn: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    height: 42,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveNameBtnDisabled: {
+    opacity: 0.4,
+  },
+  saveNameBtnText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

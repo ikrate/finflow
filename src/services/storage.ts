@@ -27,6 +27,8 @@ export async function saveTransactions(transactions: Transaction[]): Promise<voi
 export async function clearAllTransactions(): Promise<void> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    const { wipeAllGroupData } = await import('./groups/storage');
+    await wipeAllGroupData();
   } catch (error) {
     console.warn('Failed to clear transactions', error);
   }

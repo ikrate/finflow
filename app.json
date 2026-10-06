@@ -12,7 +12,8 @@
       "infoPlist": {
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true,
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Allow FinFlow to use the camera to scan group sync and join QR codes."
       },
       "bundleIdentifier": "com.claycroc.finflow"
     },
@@ -40,7 +41,13 @@
         }
       ],
       "expo-sharing",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow FinFlow to use the camera to scan group sync and join QR codes."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

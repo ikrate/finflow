@@ -294,6 +294,22 @@ export function SidePanel({
                 </View>
                 <ThemedText style={styles.chevron}>›</ThemedText>
               </Pressable>
+
+              {/* Groups (Splitwise) */}
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  router.push('/groups/index');
+                }}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
+                <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                  <ThemedText style={styles.menuIcon}>👥</ThemedText>
+                </View>
+                <View style={styles.menuTextContainer}>
+                  <ThemedText style={styles.menuTitle}>Groups</ThemedText>
+                </View>
+                <ThemedText style={styles.chevron}>›</ThemedText>
+              </Pressable>
             </View>
           </Animated.View>
         </View>

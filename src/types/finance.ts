@@ -43,6 +43,8 @@ export interface AppSettings {
   enableHaptics: boolean;
   cardNicknames?: Record<string, string>;
   vendorCategories?: Record<string, Category>;
+  profileName?: string;
+  deviceId?: string;
 }
 
 export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {
