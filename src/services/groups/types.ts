@@ -18,6 +18,8 @@ export interface GroupMeta {
   status: 'open' | 'closed';
   postedThrough?: number; // household only
   lastSyncedAt?: Record<string, number>; // memberId -> ms
+  groupKey?: string;
+  needsFirstSync?: boolean;
 }
 
 export type GroupEventType =
@@ -29,7 +31,8 @@ export type GroupEventType =
   | 'expense_deleted'
   | 'settlement_upserted'
   | 'settlement_deleted'
-  | 'group_status';
+  | 'group_status'
+  | 'group_key_set';
 
 export interface GroupEvent {
   id: string; // `${deviceId}:${seq}`
@@ -109,6 +112,10 @@ export interface GroupStatusPayload {
   status: 'open' | 'closed';
 }
 
+export interface GroupKeySetPayload {
+  key: string;
+}
+
 export interface DerivedGroupState {
   id: string;
   name: string;
@@ -121,4 +128,5 @@ export interface DerivedGroupState {
   settlements: Settlement[];
   versionVector: VersionVector;
   maxLc: number;
+  groupKey?: string;
 }

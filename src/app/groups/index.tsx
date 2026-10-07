@@ -10,6 +10,8 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BarcodeScannerModal } from '@/components/barcode-scanner-modal';
+import { PasteInviteModal } from '@/components/paste-invite-modal';
 import { ProfileNameModal } from '@/components/profile-name-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -50,6 +52,10 @@ export default function GroupsListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [groups, setGroups] = useState<GroupCardData[]>([]);
   const [isNameModalVisible, setIsNameModalVisible] = useState(false);
+
+  // Invite entry modals
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -121,7 +127,30 @@ export default function GroupsListScreen() {
     loadData();
   };
 
-  const formatLastSync = (lastSyncedAt?: Record<string, number>) => {
+  const handleOpenInviteLink = (link: string) => {
+    setIsScannerOpen(false);
+    setIsPasteModalOpen(false);
+
+    let dParam = link;
+    if (link.includes('?d=')) {
+      const qIdx = link.indexOf('?d=');
+      dParam = link.slice(qIdx + 3);
+    } else if (link.startsWith('finflow://join')) {
+      const qIdx = link.indexOf('?');
+      if (qIdx !== -1) {
+        const sp = new URLSearchParams(link.slice(qIdx + 1));
+        dParam = sp.get('d') || link;
+      }
+    }
+
+    router.push({
+      pathname: '/join',
+      params: { d: dParam },
+    });
+  };
+
+  const formatLastSync = (lastSyncedAt?: Record<string, number>, needsFirstSync?: boolean) => {
+    if (needsFirstSync) return '⚠️ Needs first sync';
     if (!lastSyncedAt) return 'Never synced';
     const timestamps = Object.values(lastSyncedAt);
     if (timestamps.length === 0) return 'Never synced';
@@ -186,21 +215,28 @@ export default function GroupsListScreen() {
               Group Expenses
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.pageSubtitle}>
-              Offline, private expense sharing via QR codes
+              Offline, private expense sharing with nearby sync
             </ThemedText>
           </View>
 
+          {/* Three Action Buttons: New group, Scan invite, Paste link */}
           <View style={styles.topBtnRow}>
             <Pressable
               onPress={() => router.push('/groups/new')}
-              style={({ pressed }) => [styles.primaryBtn, pressed && styles.btnPressed]}>
+              style={({ pressed }) => [styles.topActionBtn, styles.primaryBtn, pressed && styles.btnPressed]}>
               <ThemedText style={styles.primaryBtnText}>+ New Group</ThemedText>
             </Pressable>
 
             <Pressable
-              onPress={() => router.push('/groups/join')}
-              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.btnPressed]}>
-              <ThemedText style={styles.secondaryBtnText}>📷 Join with QR</ThemedText>
+              onPress={() => setIsScannerOpen(true)}
+              style={({ pressed }) => [styles.topActionBtn, styles.secondaryBtn, pressed && styles.btnPressed]}>
+              <ThemedText style={styles.secondaryBtnText}>📷 Scan Invite</ThemedText>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setIsPasteModalOpen(true)}
+              style={({ pressed }) => [styles.topActionBtn, styles.secondaryBtn, pressed && styles.btnPressed]}>
+              <ThemedText style={styles.secondaryBtnText}>📋 Paste Link</ThemedText>
             </Pressable>
           </View>
         </View>
@@ -214,7 +250,7 @@ export default function GroupsListScreen() {
             <ThemedText style={styles.emptyIcon}>👥</ThemedText>
             <ThemedText style={styles.emptyTitle}>No Groups Yet</ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.emptySubtitle}>
-              Create a group for a trip, roommate household bills, or event. Share and sync balances directly with other phones using on-screen QR codes.
+              Create a group for a trip, roommate household bills, or event. Share and sync balances directly with people nearby without servers.
             </ThemedText>
             <Pressable
               onPress={() => router.push('/groups/new')}
@@ -278,7 +314,7 @@ export default function GroupsListScreen() {
                       </View>
 
                       <ThemedText type="small" themeColor="textSecondary" style={styles.syncHint}>
-                        {formatLastSync(meta.lastSyncedAt)}
+                        {formatLastSync(meta.lastSyncedAt, meta.needsFirstSync)}
                       </ThemedText>
                     </View>
                   </Pressable>
@@ -288,6 +324,20 @@ export default function GroupsListScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScannerModal
+        visible={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onLinkScanned={handleOpenInviteLink}
+      />
+
+      {/* Paste Invite Link Modal */}
+      <PasteInviteModal
+        visible={isPasteModalOpen}
+        onClose={() => setIsPasteModalOpen(false)}
+        onSubmitLink={handleOpenInviteLink}
+      />
 
       {/* Onboarding Profile Name Modal */}
       <ProfileNameModal visible={isNameModalVisible} onSave={handleSaveProfileName} />
@@ -363,29 +413,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
   },
-  primaryBtn: {
+  topActionBtn: {
     flex: 1,
     height: 44,
-    backgroundColor: '#3b82f6',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  primaryBtn: {
+    backgroundColor: '#3b82f6',
   },
   primaryBtnText: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
   },
   secondaryBtn: {
-    flex: 1,
-    height: 44,
     backgroundColor: 'rgba(150, 150, 150, 0.15)',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   secondaryBtnText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
   },
   btnPressed: {

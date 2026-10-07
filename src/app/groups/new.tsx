@@ -21,6 +21,7 @@ import {
   saveGroupEvents,
   upsertGroupMeta,
 } from '@/services/groups/storage';
+import { generateGroupKey } from '@/services/groups/sync/auth';
 import { GroupMeta, GroupType } from '@/services/groups/types';
 import { generateUUID } from '@/services/groups/uuid';
 import { loadAppSettings, saveAppSettings } from '@/services/storage';
@@ -78,6 +79,7 @@ export default function CreateGroupScreen() {
       const groupId = generateUUID();
       const myMemberId = generateUUID();
       const createdAt = Date.now();
+      const groupKey = generateGroupKey();
 
       // Create initial events
       const e1 = createGroupEvent(
@@ -103,7 +105,15 @@ export default function CreateGroupScreen() {
         [e1]
       );
 
-      const initialEvents = [e1, e2];
+      const e3 = createGroupEvent(
+        groupId,
+        deviceId,
+        'group_key_set',
+        { key: groupKey },
+        [e1, e2]
+      );
+
+      const initialEvents = [e1, e2, e3];
       await saveGroupEvents(groupId, initialEvents, true);
 
       const meta: GroupMeta = {
@@ -114,6 +124,7 @@ export default function CreateGroupScreen() {
         createdAt,
         myMemberId,
         status: 'open',
+        groupKey,
       };
       await upsertGroupMeta(meta);
 
@@ -181,7 +192,7 @@ export default function CreateGroupScreen() {
               }}
               placeholder="e.g. Summer Roadtrip, Apartment 4B"
               placeholderTextColor="#94a3b8"
-              maxLength={60}
+              maxLength={40}
               style={[
                 styles.input,
                 { color: theme.text, backgroundColor: theme.background, borderColor: 'rgba(150, 150, 150, 0.25)' },
@@ -199,7 +210,7 @@ export default function CreateGroupScreen() {
               }}
               placeholder="e.g. Alex"
               placeholderTextColor="#94a3b8"
-              maxLength={30}
+              maxLength={40}
               style={[
                 styles.input,
                 { color: theme.text, backgroundColor: theme.background, borderColor: 'rgba(150, 150, 150, 0.25)' },

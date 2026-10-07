@@ -135,6 +135,41 @@ export async function upsertGroupMeta(meta: GroupMeta): Promise<void> {
 }
 
 /**
+ * Ensures that a group has a 32-byte groupKey.
+ * If missing (e.g. created prior to the update), generates one, emits a group_key_set event,
+ * updates GroupMeta in the index, and saves immediately.
+ */
+export async function ensureGroupKey(groupId: string): Promise<string> {
+  const [index, events] = await Promise.all([loadGroupsIndex(), loadGroupEvents(groupId)]);
+  const state = deriveGroupState(groupId, events);
+  if (state.groupKey) {
+    const meta = index.find((g) => g.id === groupId);
+    if (meta && !meta.groupKey) {
+      meta.groupKey = state.groupKey;
+      await upsertGroupMeta(meta);
+    }
+    return state.groupKey;
+  }
+
+  const { generateGroupKey } = await import('./sync/auth');
+  const { createGroupEvent } = await import('./eventLog');
+
+  const newKey = generateGroupKey();
+  const deviceId = await getOrCreateDeviceId();
+  const keyEvent = createGroupEvent(groupId, deviceId, 'group_key_set', { key: newKey }, events);
+  events.push(keyEvent);
+  await saveGroupEvents(groupId, events, true);
+
+  const meta = index.find((g) => g.id === groupId);
+  if (meta) {
+    meta.groupKey = newKey;
+    await upsertGroupMeta(meta);
+  }
+
+  return newKey;
+}
+
+/**
  * Completely clears all groups and events from AsyncStorage.
  */
 export async function wipeAllGroupData(): Promise<void> {
@@ -196,4 +231,3 @@ export async function updateProfileNameAcrossGroups(newName: string): Promise<vo
     }
   }
 }
-

@@ -6,6 +6,7 @@ import {
   GroupCreatedPayload,
   GroupEvent,
   GroupEventType,
+  GroupKeySetPayload,
   GroupStatusPayload,
   Member,
   MemberAddedPayload,
@@ -98,6 +99,7 @@ interface EntityWinner<T> {
 export function deriveGroupState(groupId: string, events: GroupEvent[]): DerivedGroupState {
   let groupCreatedWinner: { lc: number; deviceId: string; payload: GroupCreatedPayload; ts: number } | null = null;
   let groupStatusWinner: { lc: number; deviceId: string; status: 'open' | 'closed' } | null = null;
+  let groupKeyWinner: { lc: number; deviceId: string; key: string } | null = null;
 
   const memberWinners = new Map<string, { lc: number; deviceId: string; member: Member }>();
   const memberClaimWinners = new Map<string, { lc: number; deviceId: string; deviceIdClaim: string }>();
@@ -130,6 +132,14 @@ export function deriveGroupState(groupId: string, events: GroupEvent[]): Derived
         const payload = event.payload as GroupStatusPayload;
         if (!groupStatusWinner || compareEventOrder(orderMeta, groupStatusWinner) > 0) {
           groupStatusWinner = { ...orderMeta, status: payload.status };
+        }
+        break;
+      }
+
+      case 'group_key_set': {
+        const payload = event.payload as GroupKeySetPayload;
+        if (!groupKeyWinner || compareEventOrder(orderMeta, groupKeyWinner) > 0) {
+          groupKeyWinner = { ...orderMeta, key: payload.key };
         }
         break;
       }
@@ -267,5 +277,6 @@ export function deriveGroupState(groupId: string, events: GroupEvent[]): Derived
     settlements,
     versionVector: computeVersionVector(events),
     maxLc,
+    groupKey: groupKeyWinner?.key,
   };
 }

@@ -82,7 +82,7 @@ export function MemberModal({
 
   const getSubtitle = () => {
     if (mode === 'add_ghost') {
-      return 'Add a ghost member to split expenses with. They can link their device later via QR sync.';
+      return 'Add a ghost member to split expenses with. They can link their device later via nearby sync.';
     }
     if (mode === 'rename') {
       return `Update name for ${memberToEdit?.name || 'this member'}. This change syncs to everyone.`;

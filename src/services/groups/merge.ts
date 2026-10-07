@@ -17,6 +17,7 @@ const VALID_EVENT_TYPES: Set<GroupEventType> = new Set([
   'settlement_upserted',
   'settlement_deleted',
   'group_status',
+  'group_key_set',
 ]);
 
 const VALID_GROUP_TYPES = new Set(['trip', 'event', 'household', 'other']);
@@ -89,6 +90,13 @@ export function validateGroupEvent(event: unknown, expectedGroupId?: string): Va
       }
       if (typeof payload.currency !== 'string' || payload.currency.length === 0 || payload.currency.length > 10) {
         return { valid: false, error: 'Invalid currency in group_created' };
+      }
+      break;
+    }
+
+    case 'group_key_set': {
+      if (typeof payload.key !== 'string' || payload.key.length < 16 || payload.key.length > 128) {
+        return { valid: false, error: 'Invalid key in group_key_set' };
       }
       break;
     }

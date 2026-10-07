@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EndEventModal } from '@/components/end-event-modal';
 import { ExpenseModal } from '@/components/expense-modal';
+import { InviteModal } from '@/components/invite-modal';
 import { MemberModal } from '@/components/member-modal';
 import { SettleUpModal } from '@/components/settle-up-modal';
 import { ThemedText } from '@/components/themed-text';
@@ -22,8 +23,10 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { calculateBalances, simplifyDebts, SimplifiedDebt } from '@/services/groups/balances';
 import { createGroupEvent, deriveGroupState } from '@/services/groups/eventLog';
+import { encodeInviteLink } from '@/services/groups/invite';
 import { getExpenseShares } from '@/services/groups/splits';
 import {
+  ensureGroupKey,
   getOrCreateDeviceId,
   loadGroupEvents,
   loadGroupsIndex,
@@ -41,7 +44,7 @@ import {
 } from '@/services/groups/types';
 import { formatMoney, getMemberDisplayNames } from '@/services/groups/utils';
 import { generateUUID } from '@/services/groups/uuid';
-import { loadTransactions, saveTransactions } from '@/services/storage';
+import { loadAppSettings, loadTransactions, saveTransactions } from '@/services/storage';
 import { Category, Transaction } from '@/types/finance';
 
 const TYPE_ICONS: Record<GroupType, string> = {
@@ -68,6 +71,10 @@ export default function GroupDetailScreen() {
   const [state, setState] = useState<DerivedGroupState | null>(null);
   const [deviceId, setDeviceId] = useState<string>('');
   const [postedLedgerAmount, setPostedLedgerAmount] = useState<number | null>(null);
+
+  // Invite modal state
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
 
   // Modals state
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -197,6 +204,41 @@ export default function GroupDetailScreen() {
       setMeta(updatedMeta);
       await upsertGroupMeta(updatedMeta);
     }
+  };
+
+  // Open Invite Sheet
+  const handleOpenInviteSheet = async () => {
+    if (!groupId || !state) return;
+    try {
+      const key = await ensureGroupKey(groupId);
+      const settings = await loadAppSettings();
+      const myName = settings.profileName?.trim() || 'A member';
+      const link = encodeInviteLink({
+        v: 1,
+        groupId,
+        name: state.name,
+        type: state.type,
+        currency: state.currency,
+        inviterName: myName,
+        groupKey: key,
+      });
+      setInviteLink(link);
+      setIsInviteModalOpen(true);
+    } catch (err) {
+      console.warn('Failed to generate invite link', err);
+      Alert.alert('Error', 'Failed to generate invite link.');
+    }
+  };
+
+  // Open Sync Screen
+  const handleOpenSync = async () => {
+    if (!groupId) return;
+    try {
+      await ensureGroupKey(groupId);
+    } catch (err) {
+      console.warn('Key migration failed', err);
+    }
+    router.push({ pathname: '/groups/sync', params: { groupId } });
   };
 
   // Expense Actions
@@ -374,7 +416,7 @@ export default function GroupDetailScreen() {
           <View style={styles.navRightActions}>
             <Pressable
               hitSlop={8}
-              onPress={() => router.push(`/groups/sync?groupId=${groupId}`)}
+              onPress={handleOpenSync}
               style={styles.syncNavBtn}>
               <ThemedText style={styles.syncNavBtnText}>Sync</ThemedText>
             </Pressable>
@@ -403,6 +445,21 @@ export default function GroupDetailScreen() {
           />
         }
         showsVerticalScrollIndicator={false}>
+        {/* First Sync Pending Banner */}
+        {meta.needsFirstSync && (
+          <ThemedView type="backgroundElement" style={styles.firstSyncBanner}>
+            <View style={styles.alertBannerTextGroup}>
+              <ThemedText style={styles.firstSyncBannerTitle}>⚠️ Almost there</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Open Sync next to someone in this group to download transactions.
+              </ThemedText>
+            </View>
+            <Pressable onPress={handleOpenSync} style={styles.firstSyncBannerBtn}>
+              <ThemedText style={styles.firstSyncBannerBtnText}>Sync Now</ThemedText>
+            </Pressable>
+          </ThemedView>
+        )}
+
         {/* Sync Discrepancy Banner */}
         {showLedgerUpdateBanner && (
           <ThemedView type="backgroundElement" style={styles.alertBanner}>
@@ -454,9 +511,9 @@ export default function GroupDetailScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push(`/groups/sync?groupId=${groupId}&role=invite`)}
+              onPress={handleOpenInviteSheet}
               style={styles.quickActionBtnSecondary}>
-              <ThemedText style={styles.quickActionBtnSecondaryText}>📲 Invite (QR)</ThemedText>
+              <ThemedText style={styles.quickActionBtnSecondaryText}>👥 Invite People</ThemedText>
             </Pressable>
           </View>
         </ThemedView>
@@ -494,7 +551,7 @@ export default function GroupDetailScreen() {
             {state.expenses.length === 0 ? (
               <ThemedView type="backgroundElement" style={styles.emptyCard}>
                 <ThemedText style={styles.emptyIcon}>🧾</ThemedText>
-                <ThemedText style={styles.emptyTitle}>No Expenses Added</ThemedText>
+                <ThemedText style={styles.emptyTitle}>No Expenses Logged</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.emptySubtitle}>
                   {isClosed
                     ? 'This group is closed.'
@@ -723,6 +780,13 @@ export default function GroupDetailScreen() {
       )}
 
       {/* Modals */}
+      <InviteModal
+        visible={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        groupName={state.name}
+        inviteLink={inviteLink}
+      />
+
       <ExpenseModal
         visible={isExpenseModalOpen}
         onClose={() => setIsExpenseModalOpen(false)}
@@ -776,16 +840,16 @@ export default function GroupDetailScreen() {
             <Pressable
               onPress={() => {
                 setIsMenuOpen(false);
-                router.push(`/groups/sync?groupId=${groupId}&role=invite`);
+                handleOpenInviteSheet();
               }}
               style={styles.menuOption}>
-              <ThemedText style={styles.menuOptionText}>📲 Show Invite QR</ThemedText>
+              <ThemedText style={styles.menuOptionText}>👥 Invite People</ThemedText>
             </Pressable>
 
             <Pressable
               onPress={() => {
                 setIsMenuOpen(false);
-                router.push(`/groups/sync?groupId=${groupId}`);
+                handleOpenSync();
               }}
               style={styles.menuOption}>
               <ThemedText style={styles.menuOptionText}>🔄 Sync with Member</ThemedText>
@@ -927,6 +991,33 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
     width: '100%',
+  },
+  firstSyncBanner: {
+    padding: Spacing.three,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  firstSyncBannerTitle: {
+    fontWeight: '700',
+    color: '#2563eb',
+    fontSize: 14,
+  },
+  firstSyncBannerBtn: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  firstSyncBannerBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   alertBanner: {
     padding: Spacing.three,

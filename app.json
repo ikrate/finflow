@@ -13,7 +13,12 @@
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true,
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Allow FinFlow to use the camera to scan group sync and join QR codes."
+        "NSCameraUsageDescription": "Allow FinFlow to use the camera to scan group sync and join QR codes.",
+        "NSLocalNetworkUsageDescription": "FinFlow uses your local network to sync group expenses with people nearby. No data leaves your devices.",
+        "NSBonjourServices": [
+          "_finflow-sync._tcp",
+          "_finflow-sync._udp"
+        ]
       },
       "bundleIdentifier": "com.claycroc.finflow"
     },
